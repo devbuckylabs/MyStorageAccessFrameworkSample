@@ -37,6 +37,7 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,10 +49,12 @@ public class DirectorySelectionFragment extends Fragment {
     private static final String TAG = DirectorySelectionFragment.class.getSimpleName();
 
     public static final int REQUEST_CODE_OPEN_DIRECTORY = 1;
+    private static final int WRITE_REQUEST_CODE = 43;
 
     Uri mCurrentDirectoryUri;
     TextView mCurrentDirectoryTextView;
     Button mCreateDirectoryButton;
+    Button mCreateFileButton;
     RecyclerView mRecyclerView;
     DirectoryEntryAdapter mAdapter;
     RecyclerView.LayoutManager mLayoutManager;
@@ -99,6 +102,7 @@ public class DirectorySelectionFragment extends Fragment {
         mCurrentDirectoryTextView = (TextView) rootView
                 .findViewById(R.id.textview_current_directory);
         mCreateDirectoryButton = (Button) rootView.findViewById(R.id.button_create_directory);
+        mCreateFileButton = (Button) rootView.findViewById(R.id.button_create_file);
         mCreateDirectoryButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -122,13 +126,42 @@ public class DirectorySelectionFragment extends Fragment {
                         .show();
             }
         });
+
+        mCreateFileButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+ContentResolver contentResolver=getActivity().getContentResolver();
+                Uri docUri = DocumentsContract.buildDocumentUriUsingTree(mCurrentDirectoryUri,
+                        DocumentsContract.getTreeDocumentId(mCurrentDirectoryUri));
+Uri directoryUri;
+                try {
+                    directoryUri = DocumentsContract
+                            .createDocument(contentResolver, docUri, "text/plain" , "file");
+                    updateDirectoryEntries(mCurrentDirectoryUri);
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+
         mRecyclerView = (RecyclerView) rootView.findViewById(R.id.recyclerview_directory_entries);
         mLayoutManager = mRecyclerView.getLayoutManager();
         mRecyclerView.scrollToPosition(0);
         mAdapter = new DirectoryEntryAdapter(new ArrayList<DirectoryEntry>());
         mRecyclerView.setAdapter(mAdapter);
     }
+    private void createFile(String mimeType, String fileName) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
 
+        // Filter to only show results that can be "opened", such as
+        // a file (as opposed to a list of contacts or timezones).
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        // Create a file with the requested MIME type.
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(intent, WRITE_REQUEST_CODE);
+    }
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -198,8 +231,13 @@ public class DirectorySelectionFragment extends Fragment {
         ContentResolver contentResolver = getActivity().getContentResolver();
         Uri docUri = DocumentsContract.buildDocumentUriUsingTree(uri,
                 DocumentsContract.getTreeDocumentId(uri));
-        Uri directoryUri = DocumentsContract
-                .createDocument(contentResolver, docUri, Document.MIME_TYPE_DIR, directoryName);
+        Uri directoryUri = null;
+        try {
+            directoryUri = DocumentsContract
+                    .createDocument(contentResolver, docUri, Document.MIME_TYPE_DIR, directoryName);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
         if (directoryUri != null) {
             Log.i(TAG, String.format(
                     "Created directory : %s, Document Uri : %s, Created directory Uri : %s",
